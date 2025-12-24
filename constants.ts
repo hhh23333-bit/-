@@ -1,5 +1,25 @@
-
 import { KPI, TrendData, ScenarioDetail } from './types';
+
+export interface CityData {
+  name: string;
+  x: number; // Percentage from left
+  y: number; // Percentage from top
+  riskScore: number;
+  driverCount: number;
+  status: 'normal' | 'warning' | 'danger';
+  labelOffset?: { x: number; y: number };
+}
+
+export const CITY_MARKERS: CityData[] = [
+  { name: '北京', x: 74, y: 31, riskScore: 42, driverCount: 1840, status: 'normal', labelOffset: { x: 20, y: -20 } },
+  { name: '上海', x: 86.5, y: 56.5, riskScore: 55, driverCount: 1520, status: 'normal', labelOffset: { x: 30, y: 0 } },
+  { name: '广州', x: 75, y: 81, riskScore: 88, driverCount: 1250, status: 'danger', labelOffset: { x: -160, y: -10 } },
+  { name: '深圳', x: 76.5, y: 83.5, riskScore: 82, driverCount: 1310, status: 'warning', labelOffset: { x: 30, y: 20 } },
+  { name: '成都', x: 52, y: 64, riskScore: 92, driverCount: 890, status: 'danger', labelOffset: { x: -160, y: 10 } },
+  { name: '武汉', x: 72, y: 60, riskScore: 78, driverCount: 940, status: 'warning', labelOffset: { x: -160, y: -20 } },
+  { name: '杭州', x: 85.5, y: 60, riskScore: 45, driverCount: 1120, status: 'normal', labelOffset: { x: 30, y: 60 } },
+  { name: '无锡', x: 85.5, y: 56.5, riskScore: 75, driverCount: 460, status: 'warning', labelOffset: { x: 30, y: -60 } },
+];
 
 export const CORE_KPIS: KPI[] = [
   {

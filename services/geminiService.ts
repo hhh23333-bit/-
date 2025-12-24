@@ -35,3 +35,26 @@ export const getAIInsights = async (kpis: KPI[], trends: TrendData[]) => {
     ];
   }
 };
+
+export const getCustomResponse = async (query: string, kpis: KPI[], trends: TrendData[]) => {
+  const ai = new GoogleGenAI({ apiKey: process.env.API_KEY || "" });
+  
+  const context = `
+    当前网约车安全监控数据：
+    核心指标: ${kpis.map(k => `${k.title}: ${k.value}${k.unit}`).join(', ')}
+    趋势数据: ${trends.map(t => `${t.date}事故率${t.accidentRate}, 干预率${t.interventionRate}%`).join(', ')}
+  `;
+
+  const prompt = `你是一位专业的网约车安全管理专家。基于以下实时监控数据，回答用户关于安全运营的问题。\n\n${context}\n\n用户问题：${query}\n\n请直接给出专业、精准、简洁的中文回答。`;
+
+  try {
+    const response = await ai.models.generateContent({
+      model: "gemini-3-flash-preview",
+      contents: prompt,
+    });
+    return response.text;
+  } catch (error) {
+    console.error("Custom AI Query error:", error);
+    return "抱歉，分析数据时出现错误，请稍后再试。";
+  }
+};

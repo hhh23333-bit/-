@@ -1,8 +1,7 @@
 
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { 
-  LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Legend,
-  BarChart, Bar, Cell, PieChart, Pie
+  LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Legend
 } from 'recharts';
 import { 
   ShieldAlert, 
@@ -15,17 +14,31 @@ import {
   Clock,
   ArrowUpRight,
   ArrowDownRight,
-  Filter
+  Filter,
+  SendHorizontal,
+  User,
+  Bot
 } from 'lucide-react';
 
 import { CORE_KPIS, MOCK_TREND, MOCK_DETAILS } from './constants';
 import { AIInsight } from './types';
-import { getAIInsights } from './services/geminiService';
+import { getAIInsights, getCustomResponse } from './services/geminiService';
+
+interface ChatMessage {
+  role: 'user' | 'assistant';
+  content: string;
+}
 
 const App: React.FC = () => {
   const [insights, setInsights] = useState<AIInsight[]>([]);
   const [loadingAI, setLoadingAI] = useState(false);
   const [currentTime, setCurrentTime] = useState(new Date());
+  
+  // Chat state
+  const [userQuery, setUserQuery] = useState('');
+  const [chatHistory, setChatHistory] = useState<ChatMessage[]>([]);
+  const [queryLoading, setQueryLoading] = useState(false);
+  const chatContainerRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
     const fetchInsights = async () => {
@@ -36,7 +49,6 @@ const App: React.FC = () => {
     };
     fetchInsights();
 
-    // Real-time clock update (every 10 seconds is enough since we only show minutes)
     const timer = setInterval(() => {
       setCurrentTime(new Date());
     }, 10000);
@@ -44,14 +56,34 @@ const App: React.FC = () => {
     return () => clearInterval(timer);
   }, []);
 
+  useEffect(() => {
+    if (chatContainerRef.current) {
+      chatContainerRef.current.scrollTop = chatContainerRef.current.scrollHeight;
+    }
+  }, [chatHistory, queryLoading]);
+
   const formatDateTime = (date: Date) => {
     const y = date.getFullYear();
     const m = String(date.getMonth() + 1).padStart(2, '0');
     const d = String(date.getDate()).padStart(2, '0');
     const hh = String(date.getHours()).padStart(2, '0');
     const mm = String(date.getMinutes()).padStart(2, '0');
-    // Removed seconds per user request
     return `${y}-${m}-${d} ${hh}:${mm}`;
+  };
+
+  const handleQuerySubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!userQuery.trim() || queryLoading) return;
+
+    const currentQuery = userQuery;
+    setUserQuery('');
+    setChatHistory(prev => [...prev, { role: 'user', content: currentQuery }]);
+    setQueryLoading(true);
+
+    const response = await getCustomResponse(currentQuery, CORE_KPIS, MOCK_TREND);
+    
+    setChatHistory(prev => [...prev, { role: 'assistant', content: response || '无法获取回答' }]);
+    setQueryLoading(false);
   };
 
   const downloadCSV = () => {
@@ -174,15 +206,23 @@ const App: React.FC = () => {
           </section>
 
           {/* AI Advisor */}
-          <section className="bg-slate-900 text-white p-6 rounded-xl shadow-inner relative overflow-hidden">
-            <div className="relative z-10">
-              <div className="flex items-center justify-between mb-6">
+          <section className="bg-slate-900 text-white rounded-xl shadow-inner relative overflow-hidden flex flex-col h-[520px]">
+            <div className="p-6 pb-2 relative z-10 border-b border-slate-800">
+              <div className="flex items-center justify-between">
                 <h3 className="font-semibold flex items-center gap-2">
                   <BrainCircuit size={20} className="text-indigo-400" />
                   AI 智能安全顾问 (Insight)
                 </h3>
                 {loadingAI && <div className="w-4 h-4 border-2 border-indigo-400 border-t-transparent rounded-full animate-spin"></div>}
               </div>
+            </div>
+
+            {/* Chat & Insights Display Area */}
+            <div 
+              ref={chatContainerRef}
+              className="flex-1 overflow-y-auto p-6 space-y-4 scroll-smooth custom-scrollbar"
+            >
+              {/* Default Insights */}
               <div className="space-y-4">
                 {insights.length > 0 ? insights.map((insight, idx) => (
                   <div key={idx} className="bg-slate-800/50 p-4 rounded-lg border border-slate-700 hover:bg-slate-800 transition-colors">
@@ -194,13 +234,59 @@ const App: React.FC = () => {
                     </div>
                     <p className="text-sm text-slate-400 leading-relaxed">{insight.content}</p>
                   </div>
-                )) : (
-                  <div className="flex flex-col items-center justify-center h-full py-12 text-slate-500 italic text-sm">
-                    正在根据实时指标生成深度建议...
+                )) : !loadingAI && (
+                  <div className="flex flex-col items-center justify-center py-12 text-slate-500 italic text-sm">
+                    正在分析最新指标...
                   </div>
                 )}
               </div>
+
+              {/* Chat History */}
+              {chatHistory.map((chat, idx) => (
+                <div key={idx} className={`flex gap-3 ${chat.role === 'user' ? 'flex-row-reverse' : ''}`}>
+                  <div className={`w-8 h-8 rounded-full flex items-center justify-center shrink-0 ${chat.role === 'user' ? 'bg-indigo-600' : 'bg-slate-700'}`}>
+                    {chat.role === 'user' ? <User size={14} /> : <Bot size={14} className="text-indigo-400" />}
+                  </div>
+                  <div className={`p-3 rounded-lg text-sm max-w-[85%] ${chat.role === 'user' ? 'bg-indigo-600/20 text-indigo-100' : 'bg-slate-800 text-slate-300'}`}>
+                    {chat.content}
+                  </div>
+                </div>
+              ))}
+              
+              {queryLoading && (
+                <div className="flex gap-3">
+                  <div className="w-8 h-8 rounded-full bg-slate-700 flex items-center justify-center">
+                    <Bot size={14} className="text-indigo-400" />
+                  </div>
+                  <div className="bg-slate-800 p-3 rounded-lg flex items-center gap-2">
+                    <span className="w-1.5 h-1.5 bg-indigo-400 rounded-full animate-bounce"></span>
+                    <span className="w-1.5 h-1.5 bg-indigo-400 rounded-full animate-bounce delay-100"></span>
+                    <span className="w-1.5 h-1.5 bg-indigo-400 rounded-full animate-bounce delay-200"></span>
+                  </div>
+                </div>
+              )}
             </div>
+
+            {/* Input Form at the very bottom */}
+            <div className="p-4 bg-slate-900 border-t border-slate-800">
+              <form onSubmit={handleQuerySubmit} className="relative flex items-center gap-2">
+                <input 
+                  type="text" 
+                  value={userQuery}
+                  onChange={(e) => setUserQuery(e.target.value)}
+                  placeholder="向AI询问更多关于运营数据的细节..." 
+                  className="flex-1 bg-slate-800 border border-slate-700 text-slate-200 rounded-full pl-5 pr-12 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500/40 placeholder:text-slate-500"
+                />
+                <button 
+                  type="submit"
+                  disabled={queryLoading || !userQuery.trim()}
+                  className="absolute right-1.5 p-2 bg-indigo-600 hover:bg-indigo-500 disabled:bg-slate-700 disabled:text-slate-500 transition-colors rounded-full"
+                >
+                  <SendHorizontal size={16} />
+                </button>
+              </form>
+            </div>
+
             {/* Decoration */}
             <div className="absolute top-0 right-0 w-32 h-32 bg-indigo-600/10 blur-3xl -mr-10 -mt-10"></div>
             <div className="absolute bottom-0 left-0 w-32 h-32 bg-blue-600/10 blur-3xl -ml-10 -mb-10"></div>
@@ -350,7 +436,6 @@ const App: React.FC = () => {
         </div>
       </main>
 
-      {/* Sticky Bottom Summary (Mobile/Persistent Info) */}
       <footer className="bg-white border-t border-slate-200 px-8 py-4 flex items-center justify-between text-sm sticky bottom-0 z-40 shadow-[0_-4px_12px_rgba(0,0,0,0.05)]">
         <div className="flex gap-8">
           <div className="flex items-center gap-2">
@@ -366,6 +451,22 @@ const App: React.FC = () => {
           注: 本系统遵循《数字化解决方案》三层架构(L1结果层/L2过程层/L3基础层)设计。
         </div>
       </footer>
+      
+      <style>{`
+        .custom-scrollbar::-webkit-scrollbar {
+          width: 6px;
+        }
+        .custom-scrollbar::-webkit-scrollbar-track {
+          background: rgba(30, 41, 59, 0.5);
+        }
+        .custom-scrollbar::-webkit-scrollbar-thumb {
+          background: rgba(71, 85, 105, 0.5);
+          border-radius: 10px;
+        }
+        .custom-scrollbar::-webkit-scrollbar-thumb:hover {
+          background: rgba(99, 102, 241, 0.5);
+        }
+      `}</style>
     </div>
   );
 };
